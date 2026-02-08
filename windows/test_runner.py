@@ -1,9 +1,10 @@
 import time
 import threading
 import tkinter as tk
+import tkinter.font as tkFont
 from tkinter import ttk, messagebox
 from tkinter.simpledialog import askstring, askinteger
-import tkinter.font as tkFont
+from datetime import timedelta
 
 
 class TestRunnerMixin:
@@ -190,6 +191,7 @@ class TestRunnerMixin:
 
         self.question_font = tkFont.Font(family="Segoe UI", size=16)
         self.options_font = tkFont.Font(family="Segoe UI", size=14)
+        self.timer_font = tkFont.Font(family="Segoe UI", size=14)
         self.scale_font = tkFont.Font(family="Segoe UI", size=10)
 
         self.set_fullscreen(True)
@@ -231,8 +233,9 @@ class TestRunnerMixin:
 
         self.timer_label = ttk.Label(
             top,
-            text=f"Осталось: {self.time_left} с",
+            text=f"Осталось: {timedelta(seconds=int(self.time_left))}",
             style="Modern.TLabel",
+            font=self.timer_font,
         )
         self.timer_label.pack(side="right", padx=(10, 0))
 
@@ -349,6 +352,7 @@ class TestRunnerMixin:
     def update_font_scale(self, value):
         size = int(float(value))
         self.question_font.config(size=size)
+        self.timer_font.config(size=size)
         self.options_font.config(size=max(size - 2, 10))
 
     def start_timer_thread(self):
@@ -365,7 +369,8 @@ class TestRunnerMixin:
 
     def update_timer_label(self):
         if hasattr(self, "timer_label"):
-            self.timer_label.config(text=f"Осталось: {self.time_left} с")
+            time_left = timedelta(seconds=int(self.time_left))
+            self.timer_label.config(text=f"Осталось: {time_left}")
 
     def time_over(self):
         messagebox.showinfo("Время", "Время теста вышло.\nРезультат будет сохранён.")
