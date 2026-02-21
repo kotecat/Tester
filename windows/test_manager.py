@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from tkinter.simpledialog import askinteger
+from datetime import timedelta
 
 
 class TestManagerMixin:
@@ -21,7 +22,7 @@ class TestManagerMixin:
         main_split = tk.PanedWindow(frame, orient="horizontal", sashrelief="raised", bg=self.BG_FRAME)
         main_split.pack(fill="both", expand=True)
 
-        left = ttk.Frame(main_split, style="Modern.TFrame")
+        left = ttk.Frame(main_split, style="Modern.TFrame", padding=(0, 0, 10, 0))
         main_split.add(left, minsize=320)
 
         ttk.Label(
@@ -68,7 +69,7 @@ class TestManagerMixin:
             width=10,
         ).pack(side="right")
 
-        right = ttk.Frame(main_split, style="Modern.TFrame")
+        right = ttk.Frame(main_split, style="Modern.TFrame", padding=(10, 0))
         main_split.add(right, minsize=420)
 
         ttk.Label(
@@ -101,23 +102,36 @@ class TestManagerMixin:
         self.m_time_limit = tk.IntVar(value=300)
         ttk.Entry(right, textvariable=self.m_time_limit, font=self.ui_font).pack(fill="x", pady=(0, 10))
 
-        btns_right = ttk.Frame(right, style="Modern.TFrame")
-        btns_right.pack(fill="x", pady=(5, 0))
+        btns_right_top = ttk.Frame(right, style="Modern.TFrame")
+        btns_right_top.pack(fill="x", pady=(5, 0))
 
-        ttk.Button(
-            btns_right,
-            text="Сохранить метаданные",
-            command=self.save_metadata,
+        self.btn_new_test = ttk.Button(
+            btns_right_top,
+            text="Создать новый",
+            command=self.new_test_form,
             style="Modern.TButton",
-            width=20,
-        ).pack(side="left", padx=(0, 5))
+            width=16,
+        )
+        self.btn_new_test.pack(side="left", padx=(0, 5))
+
+        self.btn_save_edit = ttk.Button(
+            btns_right_top,
+            text="Сохранить изменения",
+            command=self.save_edit_metadata,
+            style="Modern.TButton",
+            width=18,
+        )
+        self.btn_save_edit.pack(side="left", padx=(0, 5))
+
+        btns_right_bottom = ttk.Frame(right, style="Modern.TFrame")
+        btns_right_bottom.pack(fill="x", pady=(5, 0))
 
         ttk.Button(
-            btns_right,
+            btns_right_bottom,
             text="Загрузить/обновить из TXT",
             command=self.load_or_update_test_from_txt,
             style="Modern.TButton",
-            width=22,
+            width=24,
         ).pack(side="left")
 
         ttk.Button(
@@ -128,14 +142,19 @@ class TestManagerMixin:
             width=12,
         ).pack(anchor="e", pady=(10, 10))
 
+        self.current_edit_test_id = None
+        self.btn_save_edit.pack_forget()
+
         self.load_manager_tests()
+
+    # ---------- helpers ----------
 
     def load_manager_tests(self):
         self.manager_tests_list.delete(0, tk.END)
         self.manager_tests = self.tests_repo.find_all(limit=1000)
         for t in self.manager_tests:
             self.manager_tests_list.insert(
-                tk.END, f"{t.name}  |  вопросов: {t.questions}, время: {t.time_limit} c"
+                tk.END, f"[{t.id}] {t.name}  |  вопросов: {t.questions} | {timedelta(seconds=int(t.time_limit))}"
             )
 
     def get_selected_test(self):
@@ -145,14 +164,27 @@ class TestManagerMixin:
         idx = sel[0]
         return self.manager_tests[idx]
 
+    def new_test_form(self):
+        """Режим создания нового теста: очищаем форму и скрываем 'Сохранить изменения'."""
+        self.current_edit_test_id = None
+        self.m_test_name.set("")
+        self.m_test_desc.set("")
+        self.m_questions.set(10)
+        self.m_time_limit.set(300)
+        if self.btn_save_edit.winfo_ismapped():
+            self.btn_save_edit.pack_forget()
+
     def on_test_double_click(self, event):
         test_obj = self.get_selected_test()
         if not test_obj:
             return
+        self.current_edit_test_id = test_obj.id
         self.m_test_name.set(test_obj.name)
         self.m_test_desc.set(test_obj.description or "")
         self.m_questions.set(test_obj.questions)
         self.m_time_limit.set(test_obj.time_limit)
+        if not self.btn_save_edit.winfo_ismapped():
+            self.btn_save_edit.pack(side="left", padx=(0, 5))
 
     def delete_selected_test(self):
         test_obj = self.get_selected_test()
@@ -164,9 +196,21 @@ class TestManagerMixin:
         ):
             return
         self.tests_repo.delete(test_obj.id)
+        if self.current_edit_test_id == test_obj.id:
+            self.new_test_form()
         self.load_manager_tests()
 
-    def save_metadata(self):
+    # ---------- сохранение ----------
+
+    def save_edit_metadata(self):
+        """Сохранить изменения в выбранном тесте по id, имя можно менять."""
+        if self.current_edit_test_id is None:
+            messagebox.showwarning(
+                "Сохранение",
+                "Выберите тест для редактирования (двойной клик по списку) или нажмите 'Создать новый'.",
+            )
+            return
+
         name = self.m_test_name.get().strip()
         if not name:
             messagebox.showwarning("Сохранение", "Заполните имя теста.")
@@ -176,31 +220,19 @@ class TestManagerMixin:
         q_count = self.m_questions.get() or 1
         time_limit = self.m_time_limit.get() or 60
 
-        existing = self.tests_repo.find_by_name(name) if hasattr(self.tests_repo, "find_by_name") else None
-
-        if existing:
-            self.conn.execute(
-                "UPDATE tests SET description = ?, questions = ?, time_limit = ? WHERE id = ?",
-                (desc, q_count, time_limit, existing.id),
-            )
-            self.conn.commit()
-            messagebox.showinfo("Сохранение", f"Метаданные теста '{name}' обновлены.")
-        else:
-            self.tests_repo.create(
-                {
-                    "name": name,
-                    "description": desc,
-                    "questions": q_count,
-                    "time_limit": time_limit,
-                }
-            )
-            messagebox.showinfo("Сохранение", f"Создан новый тест '{name}' (без вопросов).")
-
+        self.conn.execute(
+            "UPDATE tests SET name = ?, description = ?, questions = ?, time_limit = ? WHERE id = ?",
+            (name, desc, q_count, time_limit, self.current_edit_test_id),
+        )
+        self.conn.commit()
+        messagebox.showinfo("Сохранение", f"Метаданные теста '{name}' обновлены.")
         self.load_manager_tests()
 
+    # ---------- загрузка/обновление из TXT ----------
+
     def load_or_update_test_from_txt(self):
-        name = self.m_test_name.get().strip()
-        if not name:
+        name_from_form = self.m_test_name.get().strip()
+        if not name_from_form:
             messagebox.showwarning("Имя теста", "Заполните имя теста.")
             return
 
@@ -239,28 +271,31 @@ class TestManagerMixin:
         desc = self.m_test_desc.get().strip() or None
         time_limit = self.m_time_limit.get() or 60
 
-        existing = self.tests_repo.find_by_name(name) if hasattr(self.tests_repo, "find_by_name") else None
-        if existing:
+        if self.current_edit_test_id is not None:
+            test_id = self.current_edit_test_id
             self.conn.execute(
                 "DELETE FROM answers WHERE question_id IN (SELECT id FROM questions WHERE test_id = ?)",
-                (existing.id,),
+                (test_id,),
             )
-            self.conn.execute("DELETE FROM questions WHERE test_id = ?", (existing.id,))
+            self.conn.execute("DELETE FROM questions WHERE test_id = ?", (test_id,))
             self.conn.execute(
-                "UPDATE tests SET description = ?, questions = ?, time_limit = ? WHERE id = ?",
-                (desc, questions_count, time_limit, existing.id),
+                "UPDATE tests SET name = ?, description = ?, questions = ?, time_limit = ? WHERE id = ?",
+                (name_from_form, desc, questions_count, time_limit, test_id),
             )
             self.conn.commit()
-            test_obj = existing
         else:
             test_obj = self.tests_repo.create(
                 {
-                    "name": name,
+                    "name": name_from_form,
                     "description": desc,
                     "questions": questions_count,
                     "time_limit": time_limit,
                 }
             )
+            test_id = test_obj.id
+            self.current_edit_test_id = test_id
+            if not self.btn_save_edit.winfo_ismapped():
+                self.btn_save_edit.pack(side="left", padx=(0, 5))
 
         created_questions = 0
         for block in blocks:
@@ -275,7 +310,7 @@ class TestManagerMixin:
 
             q_obj = self.questions_repo.create(
                 {
-                    "test_id": test_obj.id,
+                    "test_id": test_id,
                     "q_text": q_text,
                 }
             )
@@ -300,6 +335,6 @@ class TestManagerMixin:
 
         messagebox.showinfo(
             "Готово",
-            f"Тест '{test_obj.name}' загружен/обновлён.\nВопросов создано: {created_questions}",
+            f"Тест '{name_from_form}' загружен/обновлён.\nВопросов создано: {created_questions}",
         )
         self.load_manager_tests()
