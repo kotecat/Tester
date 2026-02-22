@@ -30,7 +30,7 @@ def center_window(win, width=900, height=600):
 class App(tk.Tk, TestRunnerMixin, TestManagerMixin, ResultsViewMixin):
     def __init__(self):
         tk.Tk.__init__(self)
-        self.title("Система тестирования")
+        self.title("TesterMaker")
         self.configure(bg=BG_MAIN)
         center_window(self, 900, 600)
 
@@ -94,13 +94,13 @@ class App(tk.Tk, TestRunnerMixin, TestManagerMixin, ResultsViewMixin):
         self.timer_running = False if hasattr(self, "timer_running") else False
         self.set_fullscreen(False)
         self.clear_root()
-        center_window(self, 900, 600)
+        center_window(self, 700, 500)
 
         frame = self.make_frame()
 
         ttk.Label(
             frame,
-            text="Система тестирования",
+            text="TesterMaker - Система тестирования",
             font=self.title_font,
             style="Modern.TLabel",
         ).pack(pady=(10, 20))
