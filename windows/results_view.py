@@ -1,7 +1,6 @@
 import tkinter as tk
 from tkinter import ttk
-from dateutil import tz
-from datetime import datetime
+from datetime import datetime, timezone as tz
 
 from database.models import Result
 
@@ -111,8 +110,8 @@ class ResultsViewMixin:
             if taken_at:
                 taken_at = (
                     taken_at
-                    .replace(tzinfo=tz.UTC)
-                    .astimezone(tz.tzlocal())
+                    .replace(tzinfo=tz.utc)
+                    .astimezone()
                     .strftime("%Y-%m-%d %H:%M:%S")
                 )
             self.results_tree.insert(
